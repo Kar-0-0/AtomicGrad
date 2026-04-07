@@ -53,7 +53,7 @@ def random(seed, mod, a, c):
 
 def randn(*shape):
     out = [[[None for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])]
-    gen = random(0, 1664525, 1013904223, 2**32)
+    gen = random(0, 2**32, 1664525, 1013904223)
     for b in range(shape[0]):
         for i in range(shape[1]):
             for j in range(shape[2]):
