@@ -4,6 +4,8 @@ class Tensor:
         self.shape = self.get_shape(data)
         self.children = set(_children)
         self.op = _op
+        self.grad = None
+        self._backward = lambda: None
 
     def get_shape(self, data):
         if not isinstance(data, list):
@@ -37,6 +39,12 @@ class Tensor:
 
                     out[b][i][j] = acc
 
+        def _backward():
+            self.grad += out.grad.__matmul__(other.transpose()) 
+            other.grad += self.transpose().__matmul__(out.grad)  
+
+        out._backward = _backward
+
         return Tensor(out.data, (self, other), '@')
 
     def __add__(self, other):
@@ -47,16 +55,81 @@ class Tensor:
                     for j in range(self.shape[2]):
                         out[b][i][j] = self.data[b][i][j] + other
             
-            return Tensor(out.data, (self, other), "+")
-
         else:
             assert isinstance(self, Tensor) and isinstance(other, Tensor) and self.shape == other.shape
             for b in range(self.shape[0]):
                 for i in range(self.shape[1]):
                     for j in range(self.shape[2]):
                          out[b][i][j] = self.data[b][i][j] + other[b][i][j]
+        
+        def _backward():
+            self.grad += out.grad 
+            if isinstance(other, (Tensor)):
+                other.grad += out.grad
 
-            return Tensor(out, (self, other), "+")
+        out._backward = _backward
+    
+        return Tensor(out.data, (self, other), "+")
+
+    def transpose(self):
+        if len(self.shape) == 3:
+            out = zeros(self.shape[0], self.shape[-1], self.shape[1])
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        out[b][j][i] = self.data[b][i][j]
+
+        elif len(self.shape) == 2:
+            out = zeros(self.shape[1], self.shape[0])
+            for i in range(self.shape[0]):
+                for j in range(self.shape[1]):
+                    out[j][i] = self.data[i][j]
+        else:
+            print(self.shape)
+            self.data
+            out = Tensor(["Not working"])
+        
+        return Tensor(out.data)
+    
+    def backward(self):
+        topo = []
+        visited = set()
+
+        def get_topo(v):
+            if v not in visited:
+                visited.add(v)
+                for child in v.children:
+                    get_topo(child)
+                topo.append(v)
+        
+        get_topo(self)
+
+        for node in topo:
+            node.grad = zeros(*node.shape)
+
+        self.grad = ones(*self.shape)
+        
+        for node in reversed(topo):
+            node._backward()
+
+    def __iadd__(self, other):
+        if isinstance(other, (int, float)):
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        self.data[b][i][j] = self.data[b][i][j] + other
+            
+        else:
+            assert isinstance(self, Tensor) and isinstance(other, Tensor) and self.shape == other.shape
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                         self.data[b][i][j] = self.data[b][i][j] + other.data[b][i][j]
+        
+
+        return self
+
+        
 
     def __len__(self):
         return len(self.data)
@@ -72,12 +145,8 @@ class Tensor:
     
     def unsqueeze(self):
         out = [self.data]
+        return Tensor(out)
 
-        return Tensor(out)
-    
-    def broadcast(self, bs):
-        out = [self.data[0] for _ in range(bs)]
-        return Tensor(out)
 
 class Linear:
     def __init__(self, in_features, out_features, bias=True):
@@ -106,17 +175,22 @@ def randn(*shape):
                     out[b][i][j] = next(gen)
             else:
                 out[b][i] = next(gen)
-    
+
     return Tensor(out)
 
-
 def zeros(*shape):
-    out = [[[0 for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])]
+    if len(shape) == 3:
+        out = [[[0 for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])]
+    else:
+        out = [[0 for _ in range(shape[-1])] for _ in range(shape[0])]
 
     return Tensor(out)
     
 def ones(*shape):
-    out = [[[1 for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])]
+    if len(shape) == 3:
+        out = [[[1 for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])]
+    else:
+        out = [[1 for _ in range(shape[-1])] for _ in range(shape[0])]
 
     return Tensor(out)
 
