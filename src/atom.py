@@ -7,11 +7,6 @@ class Tensor:
         self.grad = None
         self._backward = lambda: None
 
-    def get_shape(self, data):
-        if not isinstance(data, list):
-            return () # scalar
-
-        return (len(data),) + self.get_shape(data[0])
 
     def __matmul__(self, other):
         if not isinstance(self, Tensor) or not isinstance(other, Tensor):
@@ -71,6 +66,49 @@ class Tensor:
     
         return Tensor(out.data, (self, other), "+")
 
+    def __iadd__(self, other):
+        if isinstance(other, (int, float)):
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        self.data[b][i][j] = self.data[b][i][j] + other
+            
+        else:
+            assert isinstance(self, Tensor) and isinstance(other, Tensor) and self.shape == other.shape
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                         self.data[b][i][j] = self.data[b][i][j] + other.data[b][i][j]
+        
+        return self
+
+    def __len__(self):
+        return len(self.data)
+    
+    def __repr__(self):
+        return f"Tensor({self.data})"
+
+    def __getitem__(self, key):
+        return self.data[key]
+    
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    
+    def __rpow__(self, other):
+        out = zeros(*self.shape)
+        if len(self.shape) == 3:
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        out[b][i][j] = other**(self.data[b][i][j])
+        
+        else:
+            for i in range(self.shape[0]):
+                for j in range(self.shape[1]):
+                    out[i][j] = other**(self.data[i][j])
+
+        return Tensor(out.data)
+
     def transpose(self):
         if len(self.shape) == 3:
             out = zeros(self.shape[0], self.shape[-1], self.shape[1])
@@ -90,7 +128,57 @@ class Tensor:
             out = Tensor(["Not working"])
         
         return Tensor(out.data)
+
+    def get_shape(self, data):
+        if not isinstance(data, list):
+            return () # scalar
+
+        return (len(data),) + self.get_shape(data[0])
+
+    def unsqueeze(self):
+        out = [self.data]
+        return Tensor(out)
     
+    def exp(self):
+        # self**other
+        e = 2.71828
+        out = e**self
+
+        return Tensor(out.data)
+
+    def normalize(self):
+        out = zeros(*self.shape)
+        if len(self.shape) == 3:
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    row_sum = sum(self.data[b][i])
+                    for j in range(self.shape[2]):
+                        out[b][i][j] = self.data[b][i][j] / row_sum
+        else:
+            for i in range(self.shape[0]):
+                row_sum = sum(self.data[i])
+                for j in range(self.shape[1]):
+                    out[i][j] = self.data[i][j] / row_sum
+                        
+        return Tensor(out.data)
+
+    def flatten(self):
+        out = []
+        if len(self.shape) == 3:
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        out.append(self.data[b][i][j])
+        else:
+            for i in range(self.shape[0]):
+                for j in range(self.shape[1]):
+                    out.append(self.data[i][j])
+        
+        return Tensor(out)
+    
+    def to_list(self):
+        return self.data
+
     def backward(self):
         topo = []
         visited = set()
@@ -100,52 +188,17 @@ class Tensor:
                 visited.add(v)
                 for child in v.children:
                     get_topo(child)
+                
                 topo.append(v)
-        
+
         get_topo(self)
 
         for node in topo:
             node.grad = zeros(*node.shape)
-
-        self.grad = ones(*self.shape)
         
+        self.grad = ones(*self.shape)
         for node in reversed(topo):
             node._backward()
-
-    def __iadd__(self, other):
-        if isinstance(other, (int, float)):
-            for b in range(self.shape[0]):
-                for i in range(self.shape[1]):
-                    for j in range(self.shape[2]):
-                        self.data[b][i][j] = self.data[b][i][j] + other
-            
-        else:
-            assert isinstance(self, Tensor) and isinstance(other, Tensor) and self.shape == other.shape
-            for b in range(self.shape[0]):
-                for i in range(self.shape[1]):
-                    for j in range(self.shape[2]):
-                         self.data[b][i][j] = self.data[b][i][j] + other.data[b][i][j]
-        
-
-        return self
-
-        
-
-    def __len__(self):
-        return len(self.data)
-    
-    def __repr__(self):
-        return f"Tensor({self.data})"
-
-    def __getitem__(self, key):
-        return self.data[key]
-    
-    def __setitem__(self, key, value):
-        self.data[key] = value
-    
-    def unsqueeze(self):
-        out = [self.data]
-        return Tensor(out)
 
 
 class Linear:
@@ -159,6 +212,37 @@ class Linear:
     def __call__(self, other):
         return (other @ self.weights) + self.bias if self.if_bias else other @ self.weights
 
+
+class SGD:
+    def __init__(self, parameters, lr):
+        self.parameters = parameters
+        self.lr = lr
+    
+    def zero_grad(self):
+        # parameters = [p1, p2, p3, ...]
+        for param in self.parameters:
+            param.grad = zeros(*param.shape)
+    
+    def step(self):
+        for param in self.parameters:
+            for b in range(param.shape[0]):
+                for i in range(param.shape[1]):
+                    for j in range(param.shape[2]):
+                        param.data[b][i][j] -= self.lr * param.grad.data[b][i][j]
+
+
+class CrossEntropyLoss:
+    def forward(self, targets, logits):
+        assert targets.shape[-1] == logits.shape[0]
+        probs = softmax(logits)
+
+
+
+def softmax(logits):
+    logits = logits.exp()
+    probs = logits.normalize()
+    
+    return probs
 
 def random(seed, mod, a, c):
     while True:
