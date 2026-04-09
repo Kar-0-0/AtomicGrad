@@ -1,6 +1,7 @@
 import pytest
 import torch
-from src.atom import Tensor, Linear, randn
+import math
+from src.atom import Tensor, Linear, randn, softmax
 
 def test_matmul_basic():
     # create the same data in both frameworks
@@ -68,3 +69,45 @@ def test_linear_wrong_input_features_raises():
     x = randn(2, 3, 6)  # 6 != 4
     with pytest.raises(AssertionError):
         layer(x)
+
+def test_softmax():
+    x = Tensor([[1.0, 2.0]])
+    result = softmax(x)
+    
+    e1 = math.exp(1.0)
+    e2 = math.exp(2.0)
+    expected = [e1 / (e1 + e2), e2 / (e1 + e2)]
+    
+    assert abs(result[0][0] - expected[0]) < 1e-4
+    assert abs(result[0][1] - expected[1]) < 1e-4    
+
+def test_softmax_batched():
+    x = Tensor([[1.0, 2.0], [3.0, 4.0]])
+    result = softmax(x)
+    
+    e1, e2 = math.exp(1.0), math.exp(2.0)
+    e3, e4 = math.exp(3.0), math.exp(4.0)
+    
+    expected = [
+        [e1 / (e1 + e2), e2 / (e1 + e2)],
+        [e3 / (e3 + e4), e4 / (e3 + e4)]
+    ]
+    
+    for i in range(2):
+        for j in range(2):
+            assert abs(result[i][j] - expected[i][j]) < 1e-4
+
+def test_softmax_large_batch():
+    import random
+    random.seed(42)
+    
+    data = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    
+    x = Tensor(data)
+    result = softmax(x)
+    
+    torch_result = torch.softmax(torch.tensor(data), dim=-1)
+    
+    for i in range(64):
+        for j in range(10):
+            assert abs(result[i][j] - torch_result[i][j].item()) < 1e-4
