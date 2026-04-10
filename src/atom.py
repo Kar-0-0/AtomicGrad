@@ -1,9 +1,8 @@
 class Tensor:
-    def __init__(self, data, _children=(), _op=''):
+    def __init__(self, data, _children=()):
         self.data = data
         self.shape = self.get_shape(data)
         self.children = set(_children)
-        self.op = _op
         self.grad = None
         self._backward = lambda: None
 
@@ -39,8 +38,9 @@ class Tensor:
             other.grad += self.transpose().__matmul__(out.grad)  
 
         out._backward = _backward
+        out.children = {self, other}
 
-        return Tensor(out.data, (self, other), '@')
+        return out
 
     def __add__(self, other):
         out = zeros(*self.shape)
@@ -63,8 +63,9 @@ class Tensor:
                 other.grad += out.grad
 
         out._backward = _backward
-    
-        return Tensor(out.data, (self, other), "+")
+        out.children = {self, other}    
+
+        return out
 
     def __iadd__(self, other):
         if isinstance(other, (int, float)):
