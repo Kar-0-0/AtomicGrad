@@ -237,11 +237,9 @@ class CrossEntropyLoss:
         probs = softmax(logits)
 
 
-
 def softmax(logits):
     logits = logits.exp()
     probs = logits.normalize()
-    
     return probs
 
 def random(seed, mod, a, c):
@@ -267,7 +265,6 @@ def zeros(*shape):
         out = [[[0 for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])]
     else:
         out = [[0 for _ in range(shape[-1])] for _ in range(shape[0])]
-
     return Tensor(out)
     
 def ones(*shape):
@@ -275,6 +272,4 @@ def ones(*shape):
         out = [[[1 for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])]
     else:
         out = [[1 for _ in range(shape[-1])] for _ in range(shape[0])]
-
     return Tensor(out)
-
