@@ -111,3 +111,19 @@ def test_softmax_large_batch():
     for i in range(64):
         for j in range(10):
             assert abs(result[i][j] - torch_result[i][j].item()) < 1e-4
+
+def test_softmax_3d():
+    import random
+    random.seed(42)
+    
+    data = [[[random.uniform(-5, 5) for _ in range(10)] for _ in range(4)] for _ in range(64)]
+    
+    x = Tensor(data)
+    result = softmax(x)
+    
+    torch_result = torch.softmax(torch.tensor(data), dim=-1)
+    
+    for b in range(64):
+        for i in range(4):
+            for j in range(10):
+                assert abs(result[b][i][j] - torch_result[b][i][j].item()) < 1e-4
