@@ -127,3 +127,108 @@ def test_softmax_3d():
         for i in range(4):
             for j in range(10):
                 assert abs(result[b][i][j] - torch_result[b][i][j].item()) < 1e-4
+
+def test_matmul_grad():
+    import random
+    random.seed(42)
+    
+    data_a = [[[random.uniform(-5, 5) for _ in range(4)] for _ in range(3)] for _ in range(2)]
+    data_b = [[[random.uniform(-5, 5) for _ in range(5)] for _ in range(4)] for _ in range(2)]
+    
+    a = Tensor(data_a)
+    b = Tensor(data_b)
+    
+    out = a @ b
+    out.backward()
+    
+    ta = torch.tensor(data_a, requires_grad=True)
+    tb = torch.tensor(data_b, requires_grad=True)
+    
+    tout = ta @ tb
+    tout.sum().backward()
+    
+    for bi in range(2):
+        for i in range(3):
+            for j in range(4):
+                assert abs(a.grad.data[bi][i][j] - ta.grad[bi][i][j].item()) < 1e-4
+    
+    for bi in range(2):
+        for i in range(4):
+            for j in range(5):
+                assert abs(b.grad.data[bi][i][j] - tb.grad[bi][i][j].item()) < 1e-4
+
+def test_add_grad():
+    import random
+    random.seed(42)
+    
+    data_a = [[[random.uniform(-5, 5) for _ in range(4)] for _ in range(3)] for _ in range(2)]
+    data_b = [[[random.uniform(-5, 5) for _ in range(4)] for _ in range(3)] for _ in range(2)]
+    
+    a = Tensor(data_a)
+    b = Tensor(data_b)
+    
+    out = a + b
+    out.backward()
+    
+    ta = torch.tensor(data_a, requires_grad=True)
+    tb = torch.tensor(data_b, requires_grad=True)
+    
+    tout = ta + tb
+    tout.sum().backward()
+    
+    for bi in range(2):
+        for i in range(3):
+            for j in range(4):
+                assert abs(a.grad.data[bi][i][j] - ta.grad[bi][i][j].item()) < 1e-4
+                assert abs(b.grad.data[bi][i][j] - tb.grad[bi][i][j].item()) < 1e-4
+
+def test_matmul_grad_large():
+    import random
+    random.seed(42)
+    
+    data_a = [[[random.uniform(-5, 5) for _ in range(32)] for _ in range(32)] for _ in range(64)]
+    data_b = [[[random.uniform(-5, 5) for _ in range(32)] for _ in range(32)] for _ in range(64)]
+    
+    a = Tensor(data_a)
+    b = Tensor(data_b)
+    
+    out = a @ b
+    out.backward()
+    
+    ta = torch.tensor(data_a, requires_grad=True)
+    tb = torch.tensor(data_b, requires_grad=True)
+    
+    tout = ta @ tb
+    tout.sum().backward()
+    
+    for bi in range(64):
+        for i in range(32):
+            for j in range(32):
+                assert abs(a.grad.data[bi][i][j] - ta.grad[bi][i][j].item()) < 1e-4
+                assert abs(b.grad.data[bi][i][j] - tb.grad[bi][i][j].item()) < 1e-4
+
+
+def test_add_grad_large():
+    import random
+    random.seed(42)
+    
+    data_a = [[[random.uniform(-5, 5) for _ in range(32)] for _ in range(32)] for _ in range(64)]
+    data_b = [[[random.uniform(-5, 5) for _ in range(32)] for _ in range(32)] for _ in range(64)]
+    
+    a = Tensor(data_a)
+    b = Tensor(data_b)
+    
+    out = a + b
+    out.backward()
+    
+    ta = torch.tensor(data_a, requires_grad=True)
+    tb = torch.tensor(data_b, requires_grad=True)
+    
+    tout = ta + tb
+    tout.sum().backward()
+    
+    for bi in range(64):
+        for i in range(32):
+            for j in range(32):
+                assert abs(a.grad.data[bi][i][j] - ta.grad[bi][i][j].item()) < 1e-4
+                assert abs(b.grad.data[bi][i][j] - tb.grad[bi][i][j].item()) < 1e-4
