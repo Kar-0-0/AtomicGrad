@@ -1,3 +1,5 @@
+from math import log  # Hopefully we can remove this at some point
+
 class Tensor:
     def __init__(self, data, _children=()):
         self.data = data
@@ -67,6 +69,60 @@ class Tensor:
 
         return out
 
+    def __mul__(self, other):
+        if isinstance(self, Tensor) and isinstance(other, Tensor):
+            assert self.shape == other.shape
+
+            out = zeros(*self.shape)
+            if len(self.shape) == 3:
+                for b in range(self.shape[0]):
+                    for i in range(self.shape[1]):
+                        for j in range(self.shape[2]):
+                            out[b][i][j] = self.data[b][i][j] * other.data[b][i][j]
+            else:
+                for i in range(self.shape[0]):
+                    for j in range(self.shape[1]):
+                        out[i][j] = self.data[i][j] * other.data[i][j]
+            
+            return out
+
+    def __truediv__(self, other):
+        out = zeros(*self.shape)
+        if len(self.shape) == 3:
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        if isinstance(other, Tensor):
+                            out[b][i][j] = self.data[b][i][j] / other[b][i][j]
+                        elif isinstance(other, (int, float)):
+                            out[i][j] = self.data[i][j] / other
+
+        else:
+            for i in range(self.shape[0]):
+                for j in range(self.shape[1]):
+                    if isinstance(other, Tensor):
+                        out[i][j] = self.data[i][j] / other[i][j]
+                    elif isinstance(other, (int, float)):
+                        out[i][j] = self.data[i][j] / other
+        
+        
+        return out
+
+    
+    def __sub__(self, other):
+        out = zeros(*self.shape)
+        if len(self.shape) == 3:
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        out[b][i][j] = self.data[b][i][j] - other[b][i][j]
+        else:
+            for i in range(self.shape[0]):
+                for j in range(self.shape[1]):
+                    out[i][j] = self.data[i][j] - other[i][j]
+        
+        return out
+
     def __iadd__(self, other):
         if isinstance(other, (int, float)):
             for b in range(self.shape[0]):
@@ -124,11 +180,23 @@ class Tensor:
                 for j in range(self.shape[1]):
                     out[j][i] = self.data[i][j]
         else:
-            print(self.shape)
             self.data
             out = Tensor(["Not working"])
         
         return Tensor(out.data)
+
+    def item(self):
+        assert sum([ax for ax in self.shape]) == len(self.shape) or len(self.shape) == 0
+        if len(self.shape) == 0:
+            return self.data
+
+        if len(self.shape) == 1:
+            return self.data[0]
+
+        if len(self.shape) == 3:
+            return self.data[0][0][0]
+        else:
+            return self.data[0][0]
 
     def get_shape(self, data):
         if not isinstance(data, list):
@@ -179,6 +247,41 @@ class Tensor:
     
     def to_list(self):
         return self.data
+    
+    def atom_log(self):
+        out = zeros(*self.shape)
+        if len(self.shape) == 3:
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    for j in range(self.shape[2]):
+                        out[b][i][j] = log(self.data[b][i][j])
+        else:
+            for i in range(self.shape[0]):
+                for j in range(self.shape[1]):
+                    out[i][j] = log(self.data[i][j])
+
+        return out
+
+    def atom_sum(self):
+        if len(self.shape) == 2:
+            out = zeros(self.shape[0], 1)
+            for i in range(self.shape[0]):
+                out[i][0] = sum(self.data[i])
+
+        else:
+            out = zeros(self.shape[0], self.shape[1], 1)
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    out[b][i][0] = sum(self.data[b][i])
+
+        return out
+    
+    def atom_mean(self):
+        acc = 0
+        if len(self.shape) == 2:
+            for i in range(self.shape[0]):
+                acc += self.data[i][0]
+        return acc / self.shape[0]
 
     def backward(self):
         topo = []
@@ -212,7 +315,10 @@ class Linear:
 
     def __call__(self, other):
         return (other @ self.weights) + self.bias if self.if_bias else other @ self.weights
-
+    
+    def parameters(self):
+        return [self.weights, self.bias] if self.if_bias else [self.weights]
+            
 
 class SGD:
     def __init__(self, parameters, lr):
@@ -233,9 +339,18 @@ class SGD:
 
 
 class CrossEntropyLoss:
-    def forward(self, targets, logits):
-        assert targets.shape[-1] == logits.shape[0]
+    def __call__(self, logits, targets):
+        assert targets.shape[-1] == logits.shape[-1]
         probs = softmax(logits)
+        loss = -((targets * probs.atom_log()).atom_sum().atom_mean())
+        
+        def _backward():
+            logits.grad = (probs - targets) / logits.shape[0]
+        
+        loss = Tensor([loss], (logits,))
+        loss._backward = _backward
+
+        return loss
 
 
 def softmax(logits):
