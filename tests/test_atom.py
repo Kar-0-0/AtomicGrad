@@ -1,7 +1,7 @@
 import pytest
 import torch
 import math
-from src.atom import Tensor, Linear, randn, softmax
+from src.atom import Tensor, Linear, randn, softmax, CrossEntropyLoss
 
 def test_matmul_basic():
     # create the same data in both frameworks
@@ -232,3 +232,123 @@ def test_add_grad_large():
             for j in range(32):
                 assert abs(a.grad.data[bi][i][j] - ta.grad[bi][i][j].item()) < 1e-4
                 assert abs(b.grad.data[bi][i][j] - tb.grad[bi][i][j].item()) < 1e-4
+
+def test_mul():
+    import random
+    random.seed(42)
+    
+    data_a = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    data_b = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    
+    a = Tensor(data_a)
+    b = Tensor(data_b)
+    
+    result = a * b
+    
+    ta = torch.tensor(data_a)
+    tb = torch.tensor(data_b)
+    torch_result = ta * tb
+    
+    for i in range(64):
+        for j in range(10):
+            assert abs(result[i][j] - torch_result[i][j].item()) < 1e-4
+
+
+def test_log():
+    import random
+    random.seed(42)
+    
+    data = [[random.uniform(0.1, 5) for _ in range(10)] for _ in range(64)]
+    
+    a = Tensor(data)
+    result = a.atom_log()
+    
+    ta = torch.tensor(data)
+    torch_result = torch.log(ta)
+    
+    for i in range(64):
+        for j in range(10):
+            assert abs(result[i][j] - torch_result[i][j].item()) < 1e-4
+
+
+def test_sum():
+    import random
+    random.seed(42)
+    
+    data = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    
+    a = Tensor(data)
+    result = a.atom_sum()
+    
+    ta = torch.tensor(data)
+    torch_result = torch.sum(ta, dim=-1)
+    
+    for i in range(64):
+        assert abs(result[i][0] - torch_result[i].item()) < 1e-4
+
+
+def test_mean():
+    import random
+    random.seed(42)
+    
+    data = [[random.uniform(-5, 5)] for _ in range(64)]
+    
+    a = Tensor(data)
+    result = a.atom_mean()
+    
+    ta = torch.tensor(data)
+    torch_result = torch.mean(ta)
+    
+    assert abs(result - torch_result.item()) < 1e-4
+
+def test_ce_loss():
+    import random
+    random.seed(42)
+    
+    data_logits = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    data_targets = [[0 for _ in range(10)] for _ in range(64)]
+    
+    for i in range(64):
+        target_class = random.randint(0, 9)
+        data_targets[i][target_class] = 1
+    
+    logits = Tensor(data_logits)
+    targets = Tensor(data_targets)
+    
+    loss = CrossEntropyLoss()(logits, targets)
+
+    
+    torch_logits = torch.tensor(data_logits, dtype=torch.float32)
+    torch_targets = torch.tensor([data_targets[i].index(1) for i in range(64)])
+    
+    torch_loss = torch.nn.CrossEntropyLoss()(torch_logits, torch_targets)
+    
+    print(loss.shape)
+    assert abs(loss.item() - torch_loss.item()) < 1e-4
+
+def test_ce_loss_backward():
+    import random
+    random.seed(42)
+    
+    data_logits = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    data_targets = [[0 for _ in range(10)] for _ in range(64)]
+    
+    for i in range(64):
+        target_class = random.randint(0, 9)
+        data_targets[i][target_class] = 1
+    
+    logits = Tensor(data_logits)
+    targets = Tensor(data_targets)
+    
+    loss = CrossEntropyLoss()(logits, targets)
+    loss.backward()
+    
+    torch_logits = torch.tensor(data_logits, dtype=torch.float32, requires_grad=True)
+    torch_targets = torch.tensor([data_targets[i].index(1) for i in range(64)])
+    
+    torch_loss = torch.nn.CrossEntropyLoss()(torch_logits, torch_targets)
+    torch_loss.backward()
+    
+    for i in range(64):
+        for j in range(10):
+            assert abs(logits.grad[i][j] - torch_logits.grad[i][j].item()) < 1e-4
