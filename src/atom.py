@@ -45,29 +45,28 @@ class Tensor:
         return out
 
     def __add__(self, other):
-        out = zeros(*self.shape)
         if isinstance(other, (int, float)):
             for b in range(self.shape[0]):
                 for i in range(self.shape[1]):
-                    for j in range(self.shape[2]):
-                        out[b][i][j] = self.data[b][i][j] + other
+                    if len(self.shape) == 3:
+                        for j in range(self.shape[2]):
+                            self.data[b][i][j] = self.data[b][i][j] + other
+                    else:
+                            self.data[b][i] = self.data[b][i] + other
+
             
         else:
             assert isinstance(self, Tensor) and isinstance(other, Tensor) and self.shape == other.shape
             for b in range(self.shape[0]):
                 for i in range(self.shape[1]):
-                    for j in range(self.shape[2]):
-                         out[b][i][j] = self.data[b][i][j] + other[b][i][j]
-        
-        def _backward():
-            self.grad += out.grad 
-            if isinstance(other, (Tensor)):
-                other.grad += out.grad
-
-        out._backward = _backward
-        out.children = {self, other}    
-
-        return out
+                    if len(self.shape) == 3:
+                        print(len(self.shape))
+                        for j in range(self.shape[2]):
+                            self.data[b][i][j] = self.data[b][i][j] + other[b][i][j]
+                    else:
+                            self.data[b][i] = self.data[b][i] + other[b][i]
+       
+        return self
 
     def __mul__(self, other):
         if isinstance(self, Tensor) and isinstance(other, Tensor):
@@ -127,16 +126,24 @@ class Tensor:
         if isinstance(other, (int, float)):
             for b in range(self.shape[0]):
                 for i in range(self.shape[1]):
-                    for j in range(self.shape[2]):
-                        self.data[b][i][j] = self.data[b][i][j] + other
+                    if len(self.shape) == 3:
+                        for j in range(self.shape[2]):
+                            self.data[b][i][j] = self.data[b][i][j] + other
+                    else:
+                            self.data[b][i] = self.data[b][i] + other
+
             
         else:
             assert isinstance(self, Tensor) and isinstance(other, Tensor) and self.shape == other.shape
             for b in range(self.shape[0]):
                 for i in range(self.shape[1]):
-                    for j in range(self.shape[2]):
-                         self.data[b][i][j] = self.data[b][i][j] + other.data[b][i][j]
-        
+                    if len(self.shape) == 3:
+                        print(len(self.shape))
+                        for j in range(self.shape[2]):
+                            self.data[b][i][j] = self.data[b][i][j] + other
+                    else:
+                            self.data[b][i] = self.data[b][i] + other
+       
         return self
 
     def __len__(self):
@@ -429,3 +436,14 @@ def ones(*shape):
     else:
         out = [[1 for _ in range(shape[-1])] for _ in range(shape[0])]
     return Tensor(out)
+
+
+def one_hot(nums, num_classes):
+    out = zeros(len(nums), num_classes)
+
+    for i in range(len(nums)):
+        out[i][nums[i]] = 1
+    
+    return out
+
+
