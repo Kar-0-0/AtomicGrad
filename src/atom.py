@@ -353,6 +353,46 @@ class CrossEntropyLoss:
         return loss
 
 
+class ReLU:
+    def __call__(self, x):
+        out = zeros(*x.shape)
+        if len(x.shape) == 3:
+            for b in range(x.shape[0]):
+                for i in range(x.shape[1]):
+                    for j in range(x.shape[2]):
+                        if x[b][i][j] < 0:
+                            out[b][i][j] = 0
+                        else:
+                            out[b][i][j] = x[b][i][j]
+            
+            def _backward():
+                for b in range(x.shape[0]):
+                    for i in range(x.shape[1]):
+                        for j in range(x.shape[2]):
+                            if x[b][i][j] > 0:
+                                x.grad[b][i][j] += 1 * out.grad[b][i][j]
+                
+
+        else:
+            for i in range(x.shape[0]):
+                for j in range(x.shape[1]):
+                    if x[i][j] < 0:
+                        out[i][j] = 0
+                    else:
+                        out[i][j] = x[i][j]
+        
+            def _backward():
+                for i in range(x.shape[0]):
+                    for j in range(x.shape[1]):
+                        if x[i][j] > 0:
+                            x.grad[i][j] += 1 * out.grad[i][j]
+        
+            
+        out.children = {x}
+        out._backward = _backward
+        return out
+
+
 def softmax(logits):
     logits = logits.exp()
     probs = logits.normalize()
