@@ -1,7 +1,7 @@
 import pytest
 import torch
 import math
-from src.atom import Tensor, Linear, randn, softmax, CrossEntropyLoss
+from src.atom import Tensor, Linear, randn, softmax, CrossEntropyLoss, ReLU
 
 def test_matmul_basic():
     # create the same data in both frameworks
@@ -352,3 +352,21 @@ def test_ce_loss_backward():
     for i in range(64):
         for j in range(10):
             assert abs(logits.grad[i][j] - torch_logits.grad[i][j].item()) < 1e-4
+
+def test_relu_grad():
+    import random
+    random.seed(42)
+    
+    data = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    
+    x = Tensor(data)
+    out = ReLU()(x)
+    out.backward()
+    
+    tx = torch.tensor(data, requires_grad=True)
+    tout = torch.relu(tx)
+    tout.sum().backward()
+    
+    for i in range(64):
+        for j in range(10):
+            assert abs(x.grad[i][j] - tx.grad[i][j].item()) < 1e-4
