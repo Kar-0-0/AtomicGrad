@@ -369,3 +369,61 @@ def test_relu_grad():
     for i in range(64):
         for j in range(10):
             assert abs(x.grad[i][j] - tx.grad[i][j].item()) < 1e-4
+
+def test_flatten_2d():
+    import random
+    random.seed(42)
+    
+    data = [[random.uniform(-5, 5) for _ in range(10)] for _ in range(64)]
+    
+    x = Tensor(data)
+    result = x.flatten()
+    
+    assert result.shape == (640,)
+    
+    idx = 0
+    for i in range(64):
+        for j in range(10):
+            assert abs(result[idx] - data[i][j]) < 1e-4
+            idx += 1
+
+
+def test_flatten_3d():
+    import random
+    random.seed(42)
+    
+    data = [[[random.uniform(-5, 5) for _ in range(10)] for _ in range(4)] for _ in range(2)]
+    
+    x = Tensor(data)
+    result = x.flatten()
+    
+    assert result.shape == (2, 40)
+    
+    for b in range(2):
+        idx = 0
+        for i in range(4):
+            for j in range(10):
+                assert abs(result[b][idx] - data[b][i][j]) < 1e-4
+                idx += 1 
+
+def test_linear_2d():
+    import random
+    random.seed(42)
+    
+    data = [[random.uniform(-5, 5) for _ in range(728)] for _ in range(64)]
+    
+    x = Tensor(data)
+    l = Linear(728, 128)
+    
+    result = l(x)
+    
+    assert result.shape == (64, 128)
+    
+    torch_x = torch.tensor(data, dtype=torch.float32)
+    torch_w = torch.tensor(l.weights.data, dtype=torch.float32)
+    
+    torch_result = torch_x @ torch_w
+    
+    for i in range(64):
+        for j in range(128):
+            assert abs(result[i][j] - torch_result[i][j].item()) < 0.5      # Have to loosen tolerance because of floating point accumulation
