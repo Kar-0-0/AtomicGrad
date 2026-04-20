@@ -323,7 +323,6 @@ def test_ce_loss():
     
     torch_loss = torch.nn.CrossEntropyLoss()(torch_logits, torch_targets)
     
-    print(loss.shape)
     assert abs(loss.item() - torch_loss.item()) < 1e-4
 
 def test_ce_loss_backward():
