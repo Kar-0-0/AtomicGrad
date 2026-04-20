@@ -18,22 +18,37 @@ class Tensor:
         if len(other.shape) == 3:
             assert self.shape[0] == other.shape[0] 
             
-        B, M, K = self.shape[0], self.shape[1], other.shape[-1]
-        out = zeros(B, M, K)
-        for b in range(B):
-            mat1 = self.data[b]
-            if len(other.shape) == 3:
-                mat2 = other.data[b]
-            else:
-                mat2 = other.data
-            
+        if len(self.shape) == 2:
+            M, K = self.shape[0], other.shape[-1]
+            out = zeros(M, K)
+        else:
+            B, M, K = self.shape[0], self.shape[1], other.shape[-1]
+            out = zeros(B, M, K)
+
+        if len(self.shape) == 3:
+            for b in range(B):
+                mat1 = self.data[b]
+                if len(other.shape) == 3:
+                    mat2 = other.data[b]
+                else:
+                    mat2 = other.data
+                
+                for i in range(M):
+                    for j in range(K):
+                        acc = 0
+                        for k in range(self.shape[-1]):
+                            acc += mat1[i][k] * mat2[k][j]
+
+                        out[b][i][j] = acc
+        
+        elif len(self.shape) == 2 and len(other.shape) == 2:
             for i in range(M):
                 for j in range(K):
                     acc = 0
                     for k in range(self.shape[-1]):
-                        acc += mat1[i][k] * mat2[k][j]
-
-                    out[b][i][j] = acc
+                        acc += self.data[i][k] * other.data[k][j]
+                
+                    out[i][j] = acc
 
         def _backward():
             self.grad += out.grad.__matmul__(other.transpose()) 
@@ -253,12 +268,12 @@ class Tensor:
                     for j in range(self.shape[2]):
                         out[b][i * self.shape[2] + j] = self.data[b][i][j]
         else:
-            out = zeros(self.shape[0] * self.shape[1])
+            out = []
             for i in range(self.shape[0]):
                 for j in range(self.shape[1]):
-                    out[i * self.shape[1] + j] = self.data[i][j]
+                    out.append(self.data[i][j])
         
-        return out
+        return out if len(self.shape) == 3 else Tensor(out)
 
     def to_list(self):
         return self.data
@@ -453,5 +468,3 @@ def one_hot(nums, num_classes):
         out[i][nums[i]] = 1
     
     return out
-
-    
