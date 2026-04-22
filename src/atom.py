@@ -52,7 +52,7 @@ class Tensor:
 
         def _backward():
             self.grad += out.grad.__matmul__(other.transpose()) 
-            other.grad += self.transpose().__matmul__(out.grad)  
+            other.grad += (self.transpose()).__matmul__(out.grad)  
 
         out._backward = _backward
         out.children = {self, other}
@@ -94,7 +94,6 @@ class Tensor:
     def __mul__(self, other):
         if isinstance(self, Tensor) and isinstance(other, Tensor):
             assert self.shape == other.shape
-
             out = zeros(*self.shape)
             if len(self.shape) == 3:
                 for b in range(self.shape[0]):
@@ -105,8 +104,30 @@ class Tensor:
                 for i in range(self.shape[0]):
                     for j in range(self.shape[1]):
                         out[i][j] = self.data[i][j] * other.data[i][j]
+
+            def _backward():
+                self.grad += other * out.grad
+                other.grad += self * out.grad 
             
-            return out
+        elif isinstance(self, Tensor) and isinstance(other, (int, float)):
+            out = zeros(*self.shape)
+            if len(self.shape) == 3:
+                for b in range(self.shape[0]):
+                    for i in range(self.shape[1]):
+                        for j in range(self.shape[2]):
+                            out[b][i][j] = self.data[b][i][j] * other
+            else:
+                for i in range(self.shape[0]):
+                    for j in range(self.shape[1]):
+                        out[i][j] = self.data[i][j] * other
+                
+            def _backward():
+                self.grad += other * out.grad
+        
+        out._backward = _backward
+        out.children = {self, other} if isinstance(other, Tensor) else {self}
+
+        return out
 
     def __truediv__(self, other):
         out = zeros(*self.shape)
@@ -133,40 +154,51 @@ class Tensor:
     
     def __sub__(self, other):
         out = zeros(*self.shape)
-        if len(self.shape) == 3:
-            for b in range(self.shape[0]):
-                for i in range(self.shape[1]):
-                    for j in range(self.shape[2]):
-                        out[b][i][j] = self.data[b][i][j] - other[b][i][j]
-        else:
-            for i in range(self.shape[0]):
-                for j in range(self.shape[1]):
-                    out[i][j] = self.data[i][j] - other[i][j]
-        
+        if isinstance(other, Tensor):
+            if len(self.shape) == 3:
+                for b in range(self.shape[0]):
+                    for i in range(self.shape[1]):
+                        for j in range(self.shape[2]):
+                            out[b][i][j] = self.data[b][i][j] - other[b][i][j]
+            else:
+                for i in range(self.shape[0]):
+                    for j in range(self.shape[1]):
+                        out[i][j] = self.data[i][j] - other[i][j]
+        elif isinstance(other, (int, float)):
+            if len(self.shape) == 3:
+                for b in range(self.shape[0]):
+                    for i in range(self.shape[1]):
+                        for j in range(self.shape[2]):
+                            out[b][i][j] = self.data[b][i][j] - other
+            else:
+                for i in range(self.shape[0]):
+                    for j in range(self.shape[1]):
+                        out[i][j] = self.data[i][j] - other
+
         return out
 
     def __iadd__(self, other):
-        if isinstance(other, (int, float)):
-            for b in range(self.shape[0]):
-                for i in range(self.shape[1]):
-                    if len(self.shape) == 3:
-                        for j in range(self.shape[2]):
-                            self.data[b][i][j] = self.data[b][i][j] + other
-                    else:
-                            self.data[b][i] = self.data[b][i] + other
-
-            
+        if len(self.shape) == 2:
+            if isinstance(other, Tensor):
+                for i in range(self.shape[0]):
+                    for j in range(self.shape[1]):
+                        self.data[i][j] += other.data[i][j]
+            else:
+                for i in range(self.shape[0]):
+                    for j in range(self.shape[1]):
+                        self.data[i][j] += other
         else:
-            assert isinstance(self, Tensor) and isinstance(other, Tensor) and self.shape == other.shape
-            for b in range(self.shape[0]):
-                for i in range(self.shape[1]):
-                    if len(self.shape) == 3:
+            if isinstance(other, Tensor):
+                for b in range(self.shape[0]):
+                    for i in range(self.shape[1]):
                         for j in range(self.shape[2]):
-                            self.data[b][i][j] = self.data[b][i][j] + other[b][i][j]
-                    else:
-                            self.data[b][i] = self.data[b][i] + other[b][i]
-       
-        return self
+                            self.data[b][i][j] += other.data[b][i][j]
+            else:
+                for i in range(self.shape[0]):
+                    for j in range(self.shape[1]):
+                        self.data[b][i][j] += other
+
+        return self       
 
     def __len__(self):
         return len(self.data)
@@ -212,7 +244,7 @@ class Tensor:
             self.data
             out = Tensor(["Not working"])
         
-        return Tensor(out.data)
+        return out
 
     def item(self):
         assert sum([ax for ax in self.shape]) == len(self.shape) or len(self.shape) == 0
@@ -284,11 +316,11 @@ class Tensor:
             for b in range(self.shape[0]):
                 for i in range(self.shape[1]):
                     for j in range(self.shape[2]):
-                        out[b][i][j] = log(self.data[b][i][j])
+                        out[b][i][j] = log(max(self.data[b][i][j], 1e-7))
         else:
             for i in range(self.shape[0]):
                 for j in range(self.shape[1]):
-                    out[i][j] = log(self.data[i][j])
+                    out[i][j] = log(max(self.data[i][j], 1e-7))
 
         return out
 
@@ -312,6 +344,46 @@ class Tensor:
             for i in range(self.shape[0]):
                 acc += self.data[i][0]
         return acc / self.shape[0]
+
+    def stabilize(self):
+        out = zeros(*self.shape)
+        if len(self.shape) == 3:
+            # TODO: Implement
+            return self 
+        else:
+            for i in range(self.shape[0]):
+                row_max = max(self.data[i])
+                for j in range(self.shape[1]):
+                    out[i][j] = self.data[i][j] - row_max
+        
+        return out
+    
+    def argmax(self):
+        for i in range(self.shape[0]):
+            maxx = self.data[i].index(max(self.data[i]))
+        
+        return maxx
+
+    def atom_max(self):
+        if len(self.shape) == 3:
+            out = zeros(self.shape[0], self.shape[1])
+            for b in range(self.shape[0]):
+                for i in range(self.shape[1]):
+                    cur_max = self.data[b][i][0]
+                    for j in range(self.shape[2]):
+                        if self.data[b][i][j] > cur_max:
+                            cur_max = self.data[b][i][j]
+                    out[b][i] = cur_max 
+        else:
+            out = zeros(1, self.shape[0])
+            for i in range(self.shape[0]):
+                cur_max = self.data[i][0]
+                for j in range(self.shape[1]):
+                    if self.data[i][j] > cur_max:
+                        cur_max = self.data[i][j]
+                out[0][i] = cur_max
+        
+        return out
 
     def backward(self):
         topo = []
@@ -361,12 +433,17 @@ class SGD:
             param.grad = zeros(*param.shape)
     
     def step(self):
-        for param in self.parameters:
-            for b in range(param.shape[0]):
-                for i in range(param.shape[1]):
-                    for j in range(param.shape[2]):
-                        param.data[b][i][j] -= self.lr * param.grad.data[b][i][j]
-
+        if len(self.parameters[0].shape) == 3:
+            for param in self.parameters:
+                for b in range(param.shape[0]):
+                    for i in range(param.shape[1]):
+                        for j in range(param.shape[2]):
+                            param.data[b][i][j] -= self.lr * param.grad.data[b][i][j]
+        else:
+            for param in self.parameters:
+                for i in range(param.shape[0]):
+                        for j in range(param.shape[1]):
+                            param.data[i][j] -= self.lr * param.grad.data[i][j]
 
 class CrossEntropyLoss:
     def __call__(self, logits, targets):
@@ -375,9 +452,10 @@ class CrossEntropyLoss:
         loss = -((targets * probs.atom_log()).atom_sum().atom_mean())
         
         def _backward():
-            logits.grad = (probs - targets) / logits.shape[0]
+            logits.grad += (probs - targets) / logits.shape[0]
         
-        loss = Tensor([loss], (logits,))
+        loss = Tensor([loss])
+        loss.children = {logits}
         loss._backward = _backward
 
         return loss
@@ -424,6 +502,7 @@ class ReLU:
 
 
 def softmax(logits):
+    logits = logits.stabilize()   # Each row gets subtracted by the row max
     logits = logits.exp()
     probs = logits.normalize()
     return probs
@@ -436,14 +515,14 @@ def random(seed, mod, a, c):
 def randn(*shape):
     out = [[[None for _ in range(shape[-1])]for _ in range(shape[-2])] for _ in range(shape[0])] if len(shape) == 3 else [[None for _ in range(shape[-1])] for _ in range(shape[0])]
     gen = random(0, 2**32, 1664525, 1013904223)
+    scale = (2 / shape[0]) ** 0.5  # He initialization
     for b in range(shape[0]):
         for i in range(shape[1]):
             if len(shape) == 3:
                 for j in range(shape[2]):
-                    out[b][i][j] = next(gen)
+                    out[b][i][j] = (next(gen) * 2 - 1) * scale  # center around 0 and scale
             else:
-                out[b][i] = next(gen)
-
+                out[b][i] = (next(gen) * 2 - 1) * scale
     return Tensor(out)
 
 def zeros(*shape):
